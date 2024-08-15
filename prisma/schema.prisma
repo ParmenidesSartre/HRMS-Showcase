@@ -1,0 +1,218 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  companies Company[]
+  users     User[]
+}
+
+model User {
+  id                   Int       @id @default(autoincrement())
+  tenantId             String
+  email                String    @unique
+  password             String
+  name                 String?
+  emailVerified        Boolean   @default(false)
+  passwordResetToken   String?
+  passwordTokenExpires DateTime?
+  roleId               Int
+  role                 Role      @relation(fields: [roleId], references: [id])
+  employeeCode         String?
+  jobTitle             String?
+  companyId            String?
+  branchId             String?
+  departmentId         String?
+  managerId            Int?
+  dateOfJoining        DateTime?
+  effectiveDate        DateTime?
+  endDate              DateTime?
+  isActive             Boolean   @default(true)
+
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  company      Company?    @relation(fields: [companyId], references: [id])
+  branch       Branch?     @relation(fields: [branchId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+  manager      User?       @relation("UserToManager", fields: [managerId], references: [id])
+  subordinates User[]      @relation("UserToManager")
+
+  leaveRequests  LeaveRequest[]
+  leaveBalances  UserLeaveBalance[]
+  approvedLeaves LeaveRequest[]     @relation("ApprovedLeaves")
+  leaveHistory   LeaveHistory[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  branches    Branch[]
+  departments Department[]
+  users       User[]
+  leaveTypes  LeaveType[]
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  departments Department[]
+  users       User[]
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  branchId  String
+  name      String
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  users     User[]
+  Company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+}
+
+model LeaveType {
+  id             String   @id @default(uuid())
+  companyId      String
+  name           String
+  description    String?
+  maxDaysPerYear Int?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  company       Company            @relation(fields: [companyId], references: [id])
+  leaveBalances UserLeaveBalance[]
+  leaveRequests LeaveRequest[]
+  leaveHistory  LeaveHistory[]
+}
+
+model UserLeaveBalance {
+  id          String   @id @default(uuid())
+  userId      Int
+  leaveTypeId String
+  year        Int
+  balance     Float    @default(0)
+  createdAt   DateTime @default(now())
+  lastUpdated DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+}
+
+model LeaveRequest {
+  id           String   @id @default(uuid())
+  userId       Int
+  leaveTypeId  String
+  startDate    DateTime
+  endDate      DateTime
+  totalDays    Float
+  reason       String?
+  status       String
+  approvedById Int?
+  createdAt    DateTime @default(now())
+  lastUpdated  DateTime @default(now())
+
+  user         User           @relation(fields: [userId], references: [id])
+  leaveType    LeaveType      @relation(fields: [leaveTypeId], references: [id])
+  approvedBy   User?          @relation("ApprovedLeaves", fields: [approvedById], references: [id])
+  leaveHistory LeaveHistory[]
+}
+
+model LeaveHistory {
+  id          String   @id @default(uuid())
+  requestId   String
+  userId      Int
+  leaveTypeId String
+  startDate   DateTime
+  endDate     DateTime
+  totalDays   Float
+  status      String
+  actionDate  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  leaveRequest LeaveRequest @relation(fields: [requestId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+  leaveType    LeaveType    @relation(fields: [leaveTypeId], references: [id])
+}
+
+model RoleModulePermission {
+  roleId      Int
+  moduleId    Int
+  canCreate   Boolean @default(false)
+  canRead     Boolean @default(false)
+  canUpdate   Boolean @default(false)
+  canDelete   Boolean @default(false)
+  canDownload Boolean @default(false)
+
+  role   Role   @relation(fields: [roleId], references: [id])
+  Module Module @relation(fields: [moduleId], references: [id])
+
+  @@id([roleId, moduleId])
+}
+
+model Role {
+  id                      Int                       @id @default(autoincrement())
+  name                    String                    @unique
+  users                   User[]
+  permissions             RoleModulePermission[]
+  RoleSubModulePermission RoleSubModulePermission[]
+}
+
+model Module {
+  id          Int                    @id @default(autoincrement())
+  name        String                 @unique
+  subModules  SubModule[]
+  permissions RoleModulePermission[]
+}
+
+model SubModule {
+  id          Int                       @id @default(autoincrement())
+  name        String                    @unique
+  moduleId    Int
+  module      Module                    @relation(fields: [moduleId], references: [id])
+  permissions RoleSubModulePermission[]
+}
+
+model RoleSubModulePermission {
+  roleId      Int
+  subModuleId Int
+  canCreate   Boolean @default(false)
+  canRead     Boolean @default(false)
+  canUpdate   Boolean @default(false)
+  canDelete   Boolean @default(false)
+  canDownload Boolean @default(false)
+
+  role      Role      @relation(fields: [roleId], references: [id])
+  subModule SubModule @relation(fields: [subModuleId], references: [id])
+
+  @@id([roleId, subModuleId])
+}
